@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Claw Machine Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div id="ui">Score: 0 | State: IDLE<br>Use Arrow Keys to move, Space to lower</div>
+<!-- Simple Analytics - 100% privacy-first analytics -->
+<script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+
+<script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+    try {
+        // Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87ceeb);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+        directionalLight.position.set(0, 10, 10);
+        scene.add(directionalLight);
+
+        // Cabinet: Base (White, 2-Unit Tall Box)
+        const baseGeometry = new THREE.BoxGeometry(24, 2, 24);
+        const baseMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const base = new THREE.Mesh(baseGeometry, baseMaterial);
+        base.position.y = 1;
+        scene.add(base);
+
+        // Black feet for the base
+        const footGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
+        const footMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        for (let x = -10; x <= 10; x += 20) {
+            for (let z = -10; z <= 10; z += 20) {
+                const foot = new THREE.Mesh(footGeometry, footMaterial);
+                foot.position.set(x, 0.25, z);
+                scene.add(foot);
+            }
+        }
+
+        // Cabinet: Transparent Sides (Glass-like)
+        const sideMaterial = new THREE.MeshBasicMaterial({ color: 0xaaaaaa, transparent: true, opacity: 0.5 });
+        const sideGeometry = new THREE.PlaneGeometry(24, 12);
+        const frontSide = new THREE.Mesh(sideGeometry, sideMaterial);
+        frontSide.position.set(0, 7, 12);
+        scene.add(frontSide);
+
+        const backSide = new THREE.Mesh(sideGeometry, sideMaterial);
+        backSide.position.set(0, 7, -12);
+        backSide.rotation.y = Math.PI;
+        scene.add(backSide);
+
+        const sideGeometryLR = new THREE.PlaneGeometry(24, 12);
+        const leftSide = new THREE.Mesh(sideGeometryLR, sideMaterial);
+        leftSide.position.set(-12, 7, 0);
+        leftSide.rotation.y = Math.PI / 2;
+        scene.add(leftSide);
+
+        const rightSide = new THREE.Mesh(sideGeometryLR, sideMaterial);
+        rightSide.position.set(12, 7, 0);
+        rightSide.rotation.y = -Math.PI / 2;
+        scene.add(rightSide);
+
+        // Cabinet: Silver Supports
+        const supportGeometry = new THREE.CylinderGeometry(0.5, 0.5, 12, 32);
+        const supportMaterial = new THREE.MeshBasicMaterial({ color: 0xc0c0c0 });
+        for (let x = -11.5; x <= 11.5; x += 23) {
+            for (let z = -11.5; z <= 11.5; z += 23) {
+                const support = new THREE.Mesh(supportGeometry, supportMaterial);
+                support.position.set(x, 7, z);
+                scene.add(support);
+            }
+        }
+
+        // Cabinet: Red Roof
+        const roofGeometry = new THREE.BoxGeometry(26, 1, 26);
+        const roofMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+        roof.position.y = 13;
+        scene.add(roof);
+
+        // Cabinet: Control Panel
+        const panelGeometry = new THREE.BoxGeometry(24, 2, 2);
+        const panelMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const panel = new THREE.Mesh(panelGeometry, panelMaterial);
+        panel.position.set(0, 2, 13);
+        scene.add(panel);
+
+        const knobGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const knobMaterial = new THREE.MeshBasicMaterial({ color: 0xc0c0c0 });
+        const knob1 = new THREE.Mesh(knobGeometry, knobMaterial);
+        knob1.position.set(-5, 2.5, 13.5);
+        scene.add(knob1);
+
+        const knob2 = new THREE.Mesh(knobGeometry, knobMaterial);
+        knob2.position.set(0, 2.5, 13.5);
+        scene.add(knob2);
+
+        const knob3 = new THREE.Mesh(knobGeometry, knobMaterial);
+        knob3.position.set(5, 2.5, 13.5);
+        scene.add(knob3);
+
+        const buttonGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.5, 32);
+        const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+        button.position.set(8, 2.25, 13.5);
+        button.rotation.x = Math.PI / 2;
+        scene.add(button);
+
+        // Candy chute
+        const chuteGeometry = new THREE.BoxGeometry(4, 1, 1);
+        const chuteMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+        const chute = new THREE.Mesh(chuteGeometry, chuteMaterial);
+        chute.position.set(0, 0.5, 13);
+        scene.add(chute);
+
+        // Placeholder for "CANDY GRABBER" text and tagline
+        const textMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+        const textMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 1, 0.1), textMaterial);
+        textMesh.position.set(-5, 3, 13.5);
+        scene.add(textMesh);
+
+        const taglineMesh = new THREE.Mesh(new THREE.BoxGeometry(8, 0.5, 0.1), textMaterial);
+        taglineMesh.position.set(-4, 2, 13.5);
+        scene.add(taglineMesh);
+
+        // Game Bin
+        const binGeometry = new THREE.BoxGeometry(4, 0.5, 4);
+        const binMaterial = new THREE.MeshBasicMaterial({ color: 0x8b4513, transparent: true, opacity: 0.5 });
+        const bin = new THREE.Mesh(binGeometry, binMaterial);
+        bin.position.set(0, 2, 8);
+        scene.add(bin);
+
+        // Function to check valid prize position
+        function isPositionValid(position, prizes, minDistance) {
+            if (Math.abs(position.x) <= 2 && Math.abs(position.z - 8) <= 2) {
+                return false;
+            }
+            for (let prize of prizes) {
+                const dist = position.distanceTo(prize.position);
+                if (dist < minDistance) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Prizes (Static, spawn at y=2.5)
+        const prizes = [];
+        const prizeGeometry = new THREE.SphereGeometry(1.125, 32, 32);
+        const prizeMaterial = new THREE.MeshBasicMaterial({ color: 0xff4500 });
+        for (let i = 0; i < 10; i++) {
+            let position;
+            let attempts = 0;
+            do {
+                position = new THREE.Vector3(
+                    (Math.random() - 0.5) * 20,
+                    2.5,
+                    (Math.random() - 0.5) * 20
+                );
+                attempts++;
+                if (attempts > 100) {
+                    console.warn("Could not find valid position after 100 attempts.");
+                    break;
+                }
+            } while (!isPositionValid(position, prizes, 3));
+
+            if (attempts <= 100) {
+                const prize = new THREE.Mesh(prizeGeometry, prizeMaterial);
+                prize.position.copy(position);
+                scene.add(prize);
+                prizes.push(prize);
+            }
+        }
+
+        // Rope
+        const ropeGeometry = new THREE.CylinderGeometry(0.5, 0.5, 6, 32);
+        const ropeMaterial = new THREE.MeshBasicMaterial({ color: 0x808080 });
+        const rope = new THREE.Mesh(ropeGeometry, ropeMaterial);
+        rope.position.set(0, 11, 0);
+        scene.add(rope);
+
+        // Claw
+        const clawGroup = new THREE.Group();
+        const armGeometry = new THREE.CylinderGeometry(0.3, 0.3, 6, 32);
+        const armMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+        const arm = new THREE.Mesh(armGeometry, armMaterial);
+        arm.position.y = 3;
+        clawGroup.add(arm);
+
+        const fingerGeometry = new THREE.BoxGeometry(0.75, 0.75, 0.75);
+        const fingerMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+        const fingers = [];
+        for (let i = 0; i < 4; i++) {
+            const finger = new THREE.Mesh(fingerGeometry, fingerMaterial);
+            const angle = (i / 4) * Math.PI * 2;
+            finger.position.set(Math.cos(angle) * 1.5, 0, Math.sin(angle) * 1.5);
+            clawGroup.add(finger);
+            fingers.push(finger);
+        }
+        clawGroup.position.set(0, 8, 0);
+        clawGroup.renderOrder = 1;
+        scene.add(clawGroup);
+
+        camera.position.set(0, 12, 22);
+        camera.lookAt(0, 0, 0);
+
+        // Game State
+        const state = {
+            current: 'IDLE',
+            clawSpeed: 0.05,
+            clawVelocity: { x: 0, z: 0 },
+            fingerOpen: 1,
+            grabbedPrize: null,
+            score: 0,
+            grabStartTime: null,
+            collisionChecked: false,
+            targetPosition: null,
+            fallingPrize: null,
+            fallingVelocity: 0,
+        };
+
+        const ui = document.getElementById('ui');
+        const GRAVITY = 0.02;
+        const FLOOR_HEIGHT = 2.125;
+
+        // Controls
+        const keys = {};
+        window.addEventListener('keydown', (e) => (keys[e.key] = true));
+        window.addEventListener('keyup', (e) => (keys[e.key] = false));
+
+        function updateControls() {
+            if (state.current === 'IDLE' || state.current === 'MOVING') {
+                if (keys['ArrowLeft'] && clawGroup.position.x > -9) state.clawVelocity.x = -state.clawSpeed;
+                else if (keys['ArrowRight'] && clawGroup.position.x < 9) state.clawVelocity.x = state.clawSpeed;
+                else state.clawVelocity.x *= 0.9;
+
+                if (keys['ArrowUp'] && clawGroup.position.z > -9) state.clawVelocity.z = -state.clawSpeed;
+                else if (keys['ArrowDown'] && clawGroup.position.z < 9) state.clawVelocity.z = state.clawSpeed;
+                else state.clawVelocity.z *= 0.9;
+
+                clawGroup.position.x += state.clawVelocity.x;
+                clawGroup.position.z += state.clawVelocity.z;
+
+                if (keys[' ']) {
+                    state.current = 'LOWERING';
+                    clawGroup.position.y = 8;
+                    state.fingerOpen = 1;
+                    state.collisionChecked = false;
+                }
+            }
+        }
+
+        // Collision Detection (100% Success Rate Temporarily)
+        // Add probability constant at top with other constants
+        const GRAB_PROBABILITY = 0.85; // 95% success rate
+
+        // Modified checkCollision function (only changes to this function)
+        function checkCollision() {
+            if (state.grabbedPrize) return;
+            prizes.forEach((prize) => {
+                const clawPos = clawGroup.position;
+                const prizePos = prize.position;
+                const distance = Math.sqrt(
+                    (clawPos.x - prizePos.x) ** 2 + (clawPos.z - prizePos.z) ** 2
+                );
+                if (distance < 1.5 && clawPos.y < 4.5) {
+                    // New probability check
+                    if (Math.random() < GRAB_PROBABILITY) {
+                        state.grabbedPrize = prize;
+                        clawGroup.add(prize);
+                        prize.position.set(0, -0.75, 0);
+                        console.log(`Prize grabbed successfully (${GRAB_PROBABILITY*100}% chance)!`);
+                    } else {
+                        console.log(`Grab failed (${(1-GRAB_PROBABILITY)*100}% chance).`);
+                    }
+                }
+            });
+        }
+
+
+        // Check if prize lands on bin
+        function isPrizeOnBin(position) {
+            return Math.abs(position.x) < 2 && Math.abs(position.z - 8) < 2;
+        }
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            updateControls();
+
+            rope.position.x = clawGroup.position.x;
+            rope.position.z = clawGroup.position.z;
+            rope.position.y = 11;
+
+            if (state.current === 'LOWERING') {
+                clawGroup.position.y -= state.clawSpeed;
+                if (clawGroup.position.y <= 4) {
+                    state.current = 'GRABBING';
+                    state.grabStartTime = Date.now();
+                }
+            }
+            if (state.current === 'GRABBING') {
+                const timeElapsed = Date.now() - state.grabStartTime;
+                if (timeElapsed < 200) {
+                    state.fingerOpen = 1 - (timeElapsed / 200) * 0.5;
+                } else {
+                    state.fingerOpen = 0.5;
+                }
+                if (state.fingerOpen <= 0.5 && !state.collisionChecked) {
+                    checkCollision();
+                    state.collisionChecked = true;
+                }
+                if (timeElapsed >= 1000) {
+                    state.current = 'RAISING';
+                }
+            }
+
+            // Modified RAISING state logic
+            if (state.current === 'RAISING') {
+                clawGroup.position.y += state.clawSpeed;
+                if (clawGroup.position.y >= 8) {
+                    // Transition to DROPPING state while keeping prize attached
+                    state.current = 'DROPPING';
+                    state.targetPosition = new THREE.Vector3(0, 8, 8); // Target is bin position
+                }
+            }
+
+            // Modified DROPPING state logic
+            if (state.current === 'DROPPING') {
+                clawGroup.position.lerp(state.targetPosition, 0.1);
+
+                if (clawGroup.position.distanceTo(state.targetPosition) < 0.1) {
+                    // Only release when reaching bin
+                    if (state.grabbedPrize) {
+                        state.score += 1;
+                        console.log("Prize dropped on bin! Score: " + state.score);
+
+                        // Remove prize from scene
+                        clawGroup.remove(state.grabbedPrize);
+                        scene.remove(state.grabbedPrize);
+                        const index = prizes.indexOf(state.grabbedPrize);
+                        if (index > -1) prizes.splice(index, 1);
+
+                        state.grabbedPrize = null;
+                    }
+                    state.current = 'IDLE';
+                    state.fingerOpen = 1;
+                }
+            }
+
+            // Keep existing falling logic for failed grabs
+            if (state.fallingPrize) {
+                state.fallingVelocity += GRAVITY;
+                state.fallingPrize.position.y -= state.fallingVelocity;
+                if (state.fallingPrize.position.y <= FLOOR_HEIGHT) {
+                    state.fallingPrize.position.y = FLOOR_HEIGHT;
+                    state.fallingPrize = null;
+                    state.fallingVelocity = 0;
+                }
+            }
+
+            fingers.forEach((finger, i) => {
+                const angle = (i / 4) * Math.PI * 2;
+                finger.position.set(Math.cos(angle) * state.fingerOpen, 0, Math.sin(angle) * state.fingerOpen);
+            });
+
+            ui.innerHTML = `Score: ${state.score} | State: ${state.current}<br>Use Arrow Keys to move, Space to lower`;
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // Resize Handling
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    } catch (error) {
+        console.error('Error in game setup or rendering:', error);
+        document.body.innerHTML += `<div style="color: red; position: absolute; top: 50px; left: 10px;">Error: ${error.message}</div>`;
+    }
+</script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91af67172ad06745',t:'MTc0MTA3MDY0MS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script><script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'91b03c817ebbb09f',t:'MTc0MTA3OTM4My4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script>
+</body>
+</html>
